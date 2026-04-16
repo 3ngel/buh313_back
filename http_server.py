@@ -1,12 +1,17 @@
 # import socket
+import http.cookies
+
 import config as cfg
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+from http import cookies
 import json
 import database_records as db
+import server as srv
 from urllib.parse import urlparse, parse_qs
 import re
+import hashlib
+import module_service as service
 import log
-
 
 module_name = "http_server"
 
@@ -22,6 +27,15 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
+    # def set_cookies(self):
+    #     cookies = http.cookies.SimpleCookie()
+    #     cookies["authorization"] = 'True'
+    #     cookies['authorization']['secure'] = True
+    #     cookies['authorization']['max-age'] = 1800  # 30 минут
+    #     for morsel in cookies.values():
+    #         self.send_header("Set-Cookie", morsel.OutputString())
+    #     self.end_headers()
+
     @classmethod
     def route(cls, path):
         def decorator(func):
@@ -30,15 +44,14 @@ class RoutingHandler(BaseHTTPRequestHandler):
 
         return decorator
 
-    #Обработка GET-запросов
+    # Обработка GET-запросов
     def do_GET(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
         query_params = parse_qs(parsed_url.query)
         handler = self.routes.get(path)
         client_ip = self.client_address
-
-        #Перебираем заголовки
+        # Перебираем заголовки
         if not handler:
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
@@ -49,17 +62,17 @@ class RoutingHandler(BaseHTTPRequestHandler):
             dic = handler(handler, query_params)
             self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
 
-    #Обработка POST-запросов
+    # Обработка POST-запросов
     def do_POST(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
-        query_params = parse_qs(parsed_url.query)
+        # query_params = parse_qs(parsed_url.query)
         handler = self.routes.get(path)
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)  # Returns bytes
         post_body = post_data.decode('utf-8')
         json_data = json.loads(post_body)
-
+        client_ip = self.client_address
         if not handler:
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
@@ -71,6 +84,33 @@ class RoutingHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
 
 
+@RoutingHandler.route('/authorization')
+def authorization(handler, json_data):
+    email = json_data.get('email')
+    password = json_data.get('password')
+    password_bytes = password.encode("utf-8")
+    password_hash = hashlib.sha256(password_bytes).hexdigest()
+    if re.match(email_validate, email) is None:
+        return {"error": "Неверно указан email"}
+    if db.Authorization.check_login(email, password_hash):
+        srv.EmailOTP.send_code(email)
+        return "Success"
+    else:
+        return {"error": "Ошибка аутентификации"}
+
+
+@RoutingHandler.route('/check_code')
+def check_code(handler, json_data):
+    email = json_data.get('email')
+    code = json_data.get('code')
+    if re.match(email_validate, email) is None:
+        return {"error": "Неверно указан email"}
+    if srv.EmailOTP.check_code(email, code, None, None):
+        return "Success"
+    else:
+        return {"error": "Неверный код"}
+
+
 @RoutingHandler.route('/all_services')
 def all_services(handler, query_params):
     list = db.Services.select.servises_list()
@@ -80,6 +120,28 @@ def all_services(handler, query_params):
             "name": name,
             "price": price
         })
+    return response
+
+@RoutingHandler.route('/services/delete')
+def delete_services(handler, json_data):
+    name = json_data.get('name')
+    if service.delete_service(name):
+        return "Success"
+    else:
+        return {"error": "Ошибка удаления услуги"}
+
+@RoutingHandler.route('/services/view')
+def view_service(handler, json_data):
+    name = json_data.get('name')
+    list = db.Services.select.full_service(name)
+    response = {}
+    for name, price, type in list:
+        response = {
+            "name": name,
+            "price": price,
+            "type": type
+        }
+        break
     return response
 
 

@@ -17,7 +17,14 @@ class Authorization:
     #     else:
     #         conn.commit()
     #         return False if records == [] else True
-
+    def check_login(email, password_hash):
+        cur.execute(
+            f"SELECT email FROM public.users WHERE email = '{email}' and password_hash='{password_hash}'")
+        records = cur.fetchall()
+        if not records:
+            return False
+        else:
+            return True
     def save_code(email, code):
         try:
             cur.execute(f"INSERT INTO public.sms_codes(email, sms_code) VALUES (%s,%s)",
@@ -164,6 +171,12 @@ class Services:
             records = cur.fetchall()
             for name, price in records:
                 return name, price
+
+        def full_service(name):
+            cur.execute(f"SELECT service_name, price, type FROM public.services WHERE service_name = '{name}'")
+            records = cur.fetchall()
+            for name, price, type in records:
+                return name, price, type
 
     class add:
         def add_service(name, price, type):

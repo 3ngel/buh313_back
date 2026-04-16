@@ -136,8 +136,10 @@ class EmailOTP:
         if sended_code == code:
             # Удаление всех кодов в БД
             db.Authorization.delete_code(email.lower())
-            # Активация пользователя, сохранение информации о тг
-            db.Users.activated_user(email.lower(), user_id, username)
+            # Авторизация в тг боте
+            if user_id and username:
+                # Активация пользователя, сохранение информации о тг
+                db.Users.activated_user(email.lower(), user_id, username)
             return True
         else:
             return False
