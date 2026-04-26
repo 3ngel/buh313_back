@@ -1,5 +1,6 @@
 # import socket
-import http.cookies
+from http.cookies import SimpleCookie
+import uuid
 
 import config as cfg
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,12 +12,17 @@ from urllib.parse import urlparse, parse_qs
 import re
 import hashlib
 import module_service as service
+import module_user as user
 import log
 
 module_name = "http_server"
 
 email_validate = r"^\S+@\S+\.\S+$"
 
+#Глобальное хранилище сессий
+sessions = {
+
+}
 
 class RoutingHandler(BaseHTTPRequestHandler):
     routes = {}
@@ -26,15 +32,36 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
+    def set_403_handler(self):
+        self.send_response(403)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write("Отказано в правах доступа")
 
-    # def set_cookies(self):
-    #     cookies = http.cookies.SimpleCookie()
-    #     cookies["authorization"] = 'True'
-    #     cookies['authorization']['secure'] = True
-    #     cookies['authorization']['max-age'] = 1800  # 30 минут
-    #     for morsel in cookies.values():
-    #         self.send_header("Set-Cookie", morsel.OutputString())
-    #     self.end_headers()
+    def set_404_handler(self):
+        self.send_response(404)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write("Страница не найдена")
+
+    def set_handler_with_cookies(self, email, session_id):
+        print("Возвращаем куки")
+        print(f"""Email: {email}, Session: {session_id}""")
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        cookie = SimpleCookie()
+        cookie["authorization"] = 'True'
+        # cookies['authorization']['secure'] = True
+        cookie['authorization']['max-age'] = 1800  # 30 минут
+        cookie["email"] = email
+        cookie['session_id'] = session_id
+        # self.send_header('Set-Cookie', cookie.output(header=''))
+        for morsel in cookie.values():
+            self.send_header("Set-Cookie", morsel.OutputString())
+            # self.send_header('Set-Cookie', cookie.output(header=''))
+        self.end_headers()
+
 
     @classmethod
     def route(cls, path):
@@ -52,11 +79,21 @@ class RoutingHandler(BaseHTTPRequestHandler):
         handler = self.routes.get(path)
         client_ip = self.client_address
         # Перебираем заголовки
+        # Заголовки, которым нужны куки
+        req = ["/authorization/requests", "authorization/users", "/authorization/check_roles"]
         if not handler:
-            self.send_response(404)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write("Страница не найдена")
+            self.set_404_handler()
+        elif path in req:
+            # Получение кук:
+            cookie = SimpleCookie(self.headers.get('Cookie', ''))
+            if 'session_id' not in cookie:
+                self.set_403_handler()
+            else:
+                session_id = cookie['session_id'].value
+                email = cookie['email'].value
+                self.set_handler_with_cookies(email=email, session_id=session_id)
+                dic = handler(handler, query_params, email)
+                self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
         else:
             self.set_handler()
             dic = handler(handler, query_params)
@@ -73,19 +110,44 @@ class RoutingHandler(BaseHTTPRequestHandler):
         post_body = post_data.decode('utf-8')
         json_data = json.loads(post_body)
         client_ip = self.client_address
+        req = ['/add_request', '/authorization']
+        # Запрос не найден
         if not handler:
-            self.send_response(404)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write("Страница не найдена")
-        else:
+            self.set_404_handler()
+        #Запросы, которым не нужны персанолизированные куки
+        elif path in req:
             self.set_handler()
-            dic = handler(handler, json_data)
+            dic = handler(handler, json_data, client_ip)
             self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
+        # Запрос, в котором впервые устанавливаются куки
+        elif path == '/check_code':
+            dic = handler(handler, json_data, client_ip)
+            print(dic)
+            #Если код не проверен, то куки не устанавливаем
+            if dic != "Success":
+                print("Error нашли")
+                self.set_handler()
+            #Код проверен, куки устанавливаем
+            else:
+                print("Error не нашли")
+                session_id = str(uuid.uuid4())
+                email = json_data.get('email')
+                self.set_handler_with_cookies(email=email, session_id=session_id)
+            self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
+        else:
+            cookie = SimpleCookie(self.headers.get('Cookie', ''))
+            if 'session_id' not in cookie:
+                self.set_403_handler()
+            else:
+                session_id = cookie['session_id'].value
+                email_sender = cookie['email'].value
+                self.set_handler_with_cookies(email=email_sender, session_id=session_id)
+                dic = handler(handler, json_data, email_sender)
+                self.wfile.write(json.dumps({'result': dic}).encode('utf-8'))
 
 
 @RoutingHandler.route('/authorization')
-def authorization(handler, json_data):
+def authorization(handler, json_data, email_sender):
     email = json_data.get('email')
     password = json_data.get('password')
     password_bytes = password.encode("utf-8")
@@ -100,7 +162,7 @@ def authorization(handler, json_data):
 
 
 @RoutingHandler.route('/check_code')
-def check_code(handler, json_data):
+def check_code(handler, json_data, email_sender):
     email = json_data.get('email')
     code = json_data.get('code')
     if re.match(email_validate, email) is None:
@@ -109,6 +171,16 @@ def check_code(handler, json_data):
         return "Success"
     else:
         return {"error": "Неверный код"}
+
+
+def get_roles(email):
+    return user.Access.get_roles_by_email(email)
+
+
+@RoutingHandler.route('/authorization/check_roles')
+def check_roles(handler, query_params, email_sender):
+    roles = get_roles(email_sender)
+    return {"roles": roles}
 
 
 @RoutingHandler.route('/all_services')
@@ -122,19 +194,25 @@ def all_services(handler, query_params):
         })
     return response
 
-@RoutingHandler.route('/services/delete')
-def delete_services(handler, json_data):
+
+@RoutingHandler.route('/authorization/service/delete')
+def delete_services(handler, json_data, email_sender):
     name = json_data.get('name')
+    if "services" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
     if service.delete_service(name):
         return "Success"
     else:
         return {"error": "Ошибка удаления услуги"}
 
-@RoutingHandler.route('/services/view')
-def view_service(handler, json_data):
+
+@RoutingHandler.route('/authorization/service/view')
+def view_service(handler, json_data, email_sender):
     name = json_data.get('name')
     list = db.Services.select.full_service(name)
     response = {}
+    if "services" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
     for name, price, type in list:
         response = {
             "name": name,
@@ -146,7 +224,7 @@ def view_service(handler, json_data):
 
 
 @RoutingHandler.route('/add_request')
-def add_request(handler, json_data):
+def add_request(handler, json_data, client_ip):
     name = json_data.get('name')
     phone = json_data.get('phone')
     email = json_data.get('email')
@@ -161,7 +239,8 @@ def add_request(handler, json_data):
     if comment is None or comment == "":
         return {"error": "Не указан комментарий"}
 
-    if db.Request.add.add_request(name, phone, email, business_type, comment):
+    # Добавить передачу IP
+    if db.Request.add.add_request(name, phone, email, business_type, comment, client_ip):
         return "Success"
     else:
         return {"error": "Ошибка сохранения в БД"}

@@ -117,9 +117,17 @@ class Users:
                 for firstname, lastname in records:
                     return firstname, lastname
 
-        def roles(user_id):
+        def roles_by_id(user_id):
             cur.execute(f"""select ur.role_id from public.user_roles ur where ur.user_id in 
                                 (select u.email from users u where u.user_id = '{user_id}')""")
+            records = cur.fetchall()
+            answer = []
+            for roles in records:
+                answer.append(roles[0])
+            return answer
+
+        def roles_by_email(email):
+            cur.execute(f"""select ur.role_id from public.user_roles ur where ur.user_id = '{email}'""")
             records = cur.fetchall()
             answer = []
             for roles in records:
@@ -233,7 +241,7 @@ class Request:
                 return id, name, phone, email, business_type, comment, status
 
     class add:
-        def add_request(name, phone, email, business_type, comment):
+        def add_request(name, phone, email, business_type, comment, client_ip):
             # Вставить проверки значений
             try:
                 cur.execute(

@@ -31,7 +31,10 @@ def users_list(self=""):
 class Access:
     # Получение списка доступных ролей
     def get_roles_by_id(user_id):
-        return db.Users.Get.roles(user_id)
+        return db.Users.Get.roles_by_id(user_id)
+
+    def get_roles_by_email(email):
+        return db.Users.Get.roles_by_email(email)
 
     # Проверяет наличие адреса электронной почты
     def check_email(email):
