@@ -185,6 +185,21 @@ def check_roles(handler, query_params, email_sender):
     return {"roles": roles}
 
 
+@RoutingHandler.route('/authorization/users')
+def check_roles(handler, query_params, email_sender):
+    if "users" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    user_list = user.users_list()
+    new_user_list = []
+    for email, firstname, lastname in user_list:
+        new_user_list.append({
+            "username": f"{lastname} {firstname}",
+            "email": email,
+            "roles": get_roles(email)
+        })
+    return new_user_list
+
+
 @RoutingHandler.route('/all_services')
 def all_services(handler, query_params):
     list = db.Services.select.servises_list()
@@ -298,7 +313,7 @@ def view_requests(handler, json_data, email_sender):
     status = json_data.get('status')
     if "requests" not in get_roles(email_sender):
         return {"error": "Ошибка прав доступа"}
-    if req.edit_status(id,status):
+    if req.edit_status(id, status):
         return "Success"
     else:
         return {"error": "Ошибка при сохранении в базу данных"}
