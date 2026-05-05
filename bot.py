@@ -392,9 +392,10 @@ def check_callback_data(call):
     elif call.data in requests_methods:
         if call.data == "requests":
             Messages.edit_with_markup(call.message, "Выберите вариант", Menu.requests())
+        #Доработать с аналогией с сайтом
         elif call.data == "request_list":
-
-            Messages.edit_with_markup(call.message, "Список пуст", Menu.to_start())
+            return
+            # Messages.edit_with_markup(call.message, "Список пуст", Menu.to_start())
 
     # Кнопки Пользователь
     elif call.data in users_method:

@@ -25,6 +25,7 @@ class Authorization:
             return False
         else:
             return True
+
     def save_code(email, code):
         try:
             cur.execute(f"INSERT INTO public.sms_codes(email, sms_code) VALUES (%s,%s)",
@@ -150,10 +151,11 @@ class Users:
         else:
             conn.commit()
             return True
-    #"Удаление" пользователя
+
+    # "Удаление" пользователя
     def delete(email):
         try:
-            #Не удаляем, а помечаем их удалёнными
+            # Не удаляем, а помечаем их удалёнными
             cur.execute(f"UPDATE public.users SET deleted=true WHERE email='{email}'")
         except psycopg2.DatabaseError as err:
             print("Error: ", err)
@@ -161,7 +163,6 @@ class Users:
         else:
             conn.commit()
             return True
-
 
 
 class Services:
@@ -211,6 +212,17 @@ class Services:
                 conn.commit()
                 return True
 
+        def full_edit_service(name, new_name, price, type):
+            try:
+                cur.execute(f"UPDATE public.services SET service_name=%s, price=%s, type=%s WHERE service_name=%s",
+                            (new_name, price, type, name))
+            except psycopg2.DatabaseError as err:
+                print("Error: ", err)
+                return False
+            else:
+                conn.commit()
+                return True
+
     class delete:
         def delete_service(name):
             try:
@@ -226,11 +238,11 @@ class Services:
 class Request:
     class select:
         def request_list(self=""):
-            cur.execute(f"SELECT id, name, comment, status FROM public.requests")
+            cur.execute(f"SELECT id, name, phone, status FROM public.requests")
             records = cur.fetchall()
             answer = []
-            for id, name, message, status in records:
-                answer.append([id, name, message, status])
+            for id, name, phone, status in records:
+                answer.append([id, name, phone, status])
             return answer
 
         def by_id(request_id: str):
@@ -254,6 +266,17 @@ class Request:
                 conn.commit()
                 return True
             return
+
+    class edit:
+        def edit_status(id, status):
+            try:
+                cur.execute(f"UPDATE public.requests SET status=%s WHERE ud=%s", (status, id))
+            except psycopg2.DatabaseError as err:
+                print("Error: ", err)
+                return False
+            else:
+                conn.commit()
+                return True
 
 
 if __name__ == '__main__':

@@ -13,16 +13,18 @@ import re
 import hashlib
 import module_service as service
 import module_user as user
+import module_request as req
 import log
 
 module_name = "http_server"
 
 email_validate = r"^\S+@\S+\.\S+$"
 
-#Глобальное хранилище сессий
+# Глобальное хранилище сессий
 sessions = {
 
 }
+
 
 class RoutingHandler(BaseHTTPRequestHandler):
     routes = {}
@@ -32,6 +34,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
+
     def set_403_handler(self):
         self.send_response(403)
         self.send_header('Content-type', 'text/html')
@@ -61,7 +64,6 @@ class RoutingHandler(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", morsel.OutputString())
             # self.send_header('Set-Cookie', cookie.output(header=''))
         self.end_headers()
-
 
     @classmethod
     def route(cls, path):
@@ -114,7 +116,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         # Запрос не найден
         if not handler:
             self.set_404_handler()
-        #Запросы, которым не нужны персанолизированные куки
+        # Запросы, которым не нужны персанолизированные куки
         elif path in req:
             self.set_handler()
             dic = handler(handler, json_data, client_ip)
@@ -123,11 +125,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
         elif path == '/check_code':
             dic = handler(handler, json_data, client_ip)
             print(dic)
-            #Если код не проверен, то куки не устанавливаем
+            # Если код не проверен, то куки не устанавливаем
             if dic != "Success":
                 print("Error нашли")
                 self.set_handler()
-            #Код проверен, куки устанавливаем
+            # Код проверен, куки устанавливаем
             else:
                 print("Error не нашли")
                 session_id = str(uuid.uuid4())
@@ -223,6 +225,85 @@ def view_service(handler, json_data, email_sender):
     return response
 
 
+@RoutingHandler.route('/authorization/service/add')
+def service_add(handler, json_data, email_sender):
+    name = json_data.get('name')
+    price = json_data.get('price')
+    type = json_data.get('type')
+    if "services" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    if name == "" or name is None:
+        return {"error": "Имя услуги не должно быть пустым"}
+    try:
+        price = int(price)
+    except ValueError:
+        return {"error": "Цена должна быть целым числом"}
+    if service.add_service(name, price, type):
+        return "Success"
+    else:
+        return {"error": "Ошибка при сохранении в базу данных"}
+
+
+@RoutingHandler.route('/authorization/service/edit')
+def service_add(handler, json_data, email_sender):
+    # Имя услуги, по которой мы дальше будем ориентироваться
+    name = json_data.get('name')
+    # Оно может быть, а может и нет
+    new_name = json_data.get('new_name') or ""
+    price = json_data.get('price')
+    type = json_data.get('type')
+    if "services" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    if name == "" or name is None:
+        return {"error": "Имя услуги не должно быть пустым"}
+    try:
+        price = int(price)
+    except ValueError:
+        return {"error": "Цена должна быть целым числом"}
+    if new_name == "":
+        new_name = name
+    if service.full_edit_service(name, new_name, price, type):
+        return "Success"
+    else:
+        return {"error": "Ошибка при сохранении в базу данных"}
+
+
+@RoutingHandler.route('/authorization/requests')
+def view_requests(handler, query_params, email_sender):
+    if "requests" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    return {"response": req.view_requests()}
+
+
+@RoutingHandler.route('/authorization/request/view')
+def view_requests(handler, json_data, email_sender):
+    id = json_data.get('id')
+    if "requests" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    id, name, phone, email, business_type, comment, status = req.view_request(id)
+    return {
+        "id": id,
+        "name": name,
+        "phone": phone,
+        "email": email,
+        "business_type": business_type,
+        "comment": comment,
+        "status": status
+    }
+
+
+@RoutingHandler.route('/authorization/request/edit_status')
+def view_requests(handler, json_data, email_sender):
+    id = json_data.get('id')
+    status = json_data.get('status')
+    if "requests" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    if req.edit_status(id,status):
+        return "Success"
+    else:
+        return {"error": "Ошибка при сохранении в базу данных"}
+
+
 @RoutingHandler.route('/add_request')
 def add_request(handler, json_data, client_ip):
     name = json_data.get('name')
@@ -240,7 +321,7 @@ def add_request(handler, json_data, client_ip):
         return {"error": "Не указан комментарий"}
 
     # Добавить передачу IP
-    if db.Request.add.add_request(name, phone, email, business_type, comment, client_ip):
+    if req.add_request(name, phone, email, business_type, comment, client_ip):
         return "Success"
     else:
         return {"error": "Ошибка сохранения в БД"}

@@ -9,6 +9,8 @@ def add_service(name, price: int, type="buh"):
 def edit_services(name, type, new_value):
     return db.Services.edit.edit_service(name, type, new_value)
 
+def full_edit_service(name, new_name, price,type):
+    return  db.Services.edit.full_edit_service(name,new_name,price,type)
 
 # удаление услуги
 def delete_service(name):
