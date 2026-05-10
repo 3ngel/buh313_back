@@ -186,7 +186,7 @@ def check_roles(handler, query_params, email_sender):
 
 
 @RoutingHandler.route('/authorization/users')
-def check_roles(handler, query_params, email_sender):
+def view_all_users(handler, query_params, email_sender):
     if "users" not in get_roles(email_sender):
         return {"error": "Ошибка прав доступа"}
     user_list = user.users_list()
@@ -198,6 +198,80 @@ def check_roles(handler, query_params, email_sender):
             "roles": get_roles(email)
         })
     return new_user_list
+
+
+@RoutingHandler.route('/authorization/users/view')
+def view_user(handler, query_params, email_sender):
+    if "users" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    user_list = user.users_list()
+    for email, firstname, lastname in user_list:
+        return {
+            "username": f"{lastname} {firstname}",
+            "email": email,
+            "roles": get_roles(email)
+        }
+
+
+@RoutingHandler.route('/authorization/users/add')
+def add_user(handler, json_data, email_sender):
+    if "users" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    email = json_data.get('email')
+    firstname = json_data.get('firstname')
+    lastname = json_data.get('lastname')
+    roles = json_data.get('roles')
+    if re.match(email_validate, email) is None:
+        return {"error": "Неверно указан email"}
+    if user.add_user(email, firstname, lastname, roles):
+        return "Success"
+    else:
+        return {"error": "Ошибка при добавлении пользователя"}
+
+
+@RoutingHandler.route('/authorization/users/delete')
+def delete_user(handler, json_data, email_sender):
+    if "users" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    email = json_data.get('email')
+    if re.match(email_validate, email) is None:
+        return {"error": "Неверно указан email"}
+    if user.delete_user(email):
+        return "Success"
+    else:
+        return {"error": "Ошибка при удалении пользователя"}
+
+
+@RoutingHandler.route('/authorization/users/edit')
+def edit_user(handler, json_data, email_sender):
+    if "users" not in get_roles(email_sender):
+        return {"error": "Ошибка прав доступа"}
+    email = json_data.get('email')
+    new_email = json_data.get('email')
+    firstname = json_data.get('firstname')
+    lastname = json_data.get('lastname')
+    new_roles = json_data.get('roles')
+    old_roles = check_roles(email)
+
+    # Если почта не изменилась, оставляем как было
+    if new_email == "": new_email = email
+    #Пользователь не может редактировать о самом себе информацию
+    if email == email_sender:
+        return {"error": "Ошибка прав доступа"}
+    if re.match(email_validate, email) is None or re.match(email_validate, new_email):
+        return {"error": "Неверно указан email"}
+
+    #Если список ролей не изменился, то не будем делать лишние запросы в БД
+    if new_roles == old_roles:
+        new_roles = []
+    # Удлаяем все роли по старой почте
+    if not user.delete_all_roles(email):
+        return {"error": "Ошибка при изменении пользователя"}
+    # Редактируем пользователя
+    if user.edit_user(email, new_email, firstname, lastname, new_roles):
+        return "Success"
+    else:
+        return {"error": "Ошибка при изменении пользователя"}
 
 
 @RoutingHandler.route('/all_services')

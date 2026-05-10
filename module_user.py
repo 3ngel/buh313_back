@@ -4,13 +4,17 @@ import log
 
 module_name = "server_user"
 
-def add_user(email, firstname, lastname):
+
+def add_user(email, firstname, lastname, roles=[]):
     # Информация для отправки письма сотруднику после регистрации
     topic = "Регистрация сотрудника БухгалтерИя"
     message = f"""Здравствуйте, {firstname} {lastname}!\n
     Вы были зарегистрированы как сотрудник организации БухгалтерИя. \n
     Для завершения регистрации перейдите в бот https://t.me/buh313_bot"""
     if db.Users.create(email.lower(), firstname, lastname):
+        for role in roles:
+            if not db.Users.add_roles(email, role):
+                return False
         Email.send_email(email.lower(), topic, message)
         return True
     else:
@@ -19,7 +23,25 @@ def add_user(email, firstname, lastname):
 
 # Удаление пользователя
 def delete_user(email):
-    return db.Users.delete(email.lower())
+    if db.Users.delete_all_roles(email):
+        return db.Users.delete(email.lower())
+    else:
+        return False
+
+
+def edit_user(email, new_email, firstname, lastname, roles=[]):
+    # Сначала поправляем пользователя, а потом его роли
+    if db.Users.edit.save(email, new_email, firstname, lastname):
+        for role in roles:
+            if not db.Users.add_roles(new_email, role):
+                return False
+        return True
+    else:
+        return False
+
+
+def delete_all_roles(email):
+    return db.Users.delete_all_roles(email)
 
 
 # Получение ФИ и почты пользователя
@@ -61,6 +83,5 @@ class Get:
         else:
             firstname, lastname = db.Users.Get.name_by_email(email.lower())
             return firstname, lastname
-
 
     # def get_user_id_by_email(email):

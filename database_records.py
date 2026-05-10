@@ -136,8 +136,17 @@ class Users:
             return answer
 
     class edit:
-        def save(self):
-            return
+        def save(email, new_email, firstname, lastname):
+            try:
+                # Не удаляем, а помечаем их удалёнными
+                cur.execute(f"UPDATE public.users SET email=%s, firstname=%s, lastname=%s,  WHERE email='%s'",
+                            (new_email, firstname, lastname, email))
+            except psycopg2.DatabaseError as err:
+                print("Error: ", err)
+                return False
+            else:
+                conn.commit()
+                return True
 
     def create(email, firstname, lastname):
         try:
@@ -157,6 +166,39 @@ class Users:
         try:
             # Не удаляем, а помечаем их удалёнными
             cur.execute(f"UPDATE public.users SET deleted=true WHERE email='{email}'")
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+    def add_roles(email, role):
+        try:
+            cur.execute(
+                f"INSERT INTO public.user_roles (user_id, role_id) values (%s,%s)",
+                (email, role)
+            )
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+    def delete_role(email, role):
+        try:
+            cur.execute(f"DELETE FROM public.user_roles WHERE user_id={email} and role_id={role}")
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+    def delete_all_roles(email):
+        try:
+            cur.execute(f"DELETE FROM public.user_roles WHERE user_id={email}")
         except psycopg2.DatabaseError as err:
             print("Error: ", err)
             return False
