@@ -82,7 +82,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         client_ip = self.client_address
         # Перебираем заголовки
         # Заголовки, которым нужны куки
-        req = ["/authorization/requests", "authorization/users", "/authorization/check_roles"]
+        req = ["/authorization/requests", "/authorization/check_roles", "/authorization/users"]
         if not handler:
             self.set_404_handler()
         elif path in req:
@@ -186,7 +186,8 @@ def check_roles(handler, query_params, email_sender):
 
 
 @RoutingHandler.route('/authorization/users')
-def view_all_users(handler, query_params, email_sender):
+def view_all_users(handler, query_params, email_sender:str):
+    print(email_sender)
     if "users" not in get_roles(email_sender):
         return {"error": "Ошибка прав доступа"}
     user_list = user.users_list()
@@ -201,16 +202,18 @@ def view_all_users(handler, query_params, email_sender):
 
 
 @RoutingHandler.route('/authorization/users/view')
-def view_user(handler, query_params, email_sender):
+def view_user(handler, json_data, email_sender):
     if "users" not in get_roles(email_sender):
         return {"error": "Ошибка прав доступа"}
     user_list = user.users_list()
+    user_email = json_data.get('email')
     for email, firstname, lastname in user_list:
-        return {
-            "username": f"{lastname} {firstname}",
-            "email": email,
-            "roles": get_roles(email)
-        }
+        if email == user_email:
+            return {
+                "username": f"{lastname} {firstname}",
+                "email": email,
+                "roles": get_roles(email)
+            }
 
 
 @RoutingHandler.route('/authorization/users/add')
@@ -251,14 +254,15 @@ def edit_user(handler, json_data, email_sender):
     firstname = json_data.get('firstname')
     lastname = json_data.get('lastname')
     new_roles = json_data.get('roles')
-    old_roles = check_roles(email)
+    old_roles = get_roles(email)
 
     # Если почта не изменилась, оставляем как было
     if new_email == "": new_email = email
+    print(new_email)
     #Пользователь не может редактировать о самом себе информацию
     if email == email_sender:
         return {"error": "Ошибка прав доступа"}
-    if re.match(email_validate, email) is None or re.match(email_validate, new_email):
+    if re.match(email_validate, email) is None or re.match(email_validate, new_email) is None:
         return {"error": "Неверно указан email"}
 
     #Если список ролей не изменился, то не будем делать лишние запросы в БД
@@ -299,19 +303,15 @@ def delete_services(handler, json_data, email_sender):
 
 @RoutingHandler.route('/authorization/service/view')
 def view_service(handler, json_data, email_sender):
-    name = json_data.get('name')
-    list = db.Services.select.full_service(name)
-    response = {}
     if "services" not in get_roles(email_sender):
         return {"error": "Ошибка прав доступа"}
-    for name, price, type in list:
-        response = {
-            "name": name,
-            "price": price,
-            "type": type
-        }
-        break
-    return response
+    name = json_data.get('name')
+    name, price, types = service.get_service_by_name(name)
+    return {
+        "name": name,
+        "price": price,
+        "type": types
+    }
 
 
 @RoutingHandler.route('/authorization/service/add')

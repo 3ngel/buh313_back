@@ -26,6 +26,7 @@ class Authorization:
         else:
             return True
 
+
     def save_code(email, code):
         try:
             cur.execute(f"INSERT INTO public.sms_codes(email, sms_code) VALUES (%s,%s)",
@@ -36,6 +37,8 @@ class Authorization:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     def get_code(email):
         cur.execute(
@@ -56,6 +59,8 @@ class Authorization:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
 
 class Users:
@@ -70,6 +75,8 @@ class Users:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     class Get:
         def list(self=""):
@@ -139,7 +146,7 @@ class Users:
         def save(email, new_email, firstname, lastname):
             try:
                 # Не удаляем, а помечаем их удалёнными
-                cur.execute(f"UPDATE public.users SET email=%s, firstname=%s, lastname=%s,  WHERE email='%s'",
+                cur.execute(f"UPDATE public.users SET email=%s, firstname=%s, lastname=%s  WHERE email=%s",
                             (new_email, firstname, lastname, email))
             except psycopg2.DatabaseError as err:
                 print("Error: ", err)
@@ -147,6 +154,8 @@ class Users:
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
     def create(email, firstname, lastname):
         try:
@@ -160,18 +169,22 @@ class Users:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     # "Удаление" пользователя
     def delete(email):
         try:
             # Не удаляем, а помечаем их удалёнными
-            cur.execute(f"UPDATE public.users SET deleted=true WHERE email='{email}'")
+            cur.execute(f"DELETE FROM public.users WHERE email='{email}'")
         except psycopg2.DatabaseError as err:
             print("Error: ", err)
             return False
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     def add_roles(email, role):
         try:
@@ -185,6 +198,8 @@ class Users:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     def delete_role(email, role):
         try:
@@ -195,16 +210,20 @@ class Users:
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
     def delete_all_roles(email):
         try:
-            cur.execute(f"DELETE FROM public.user_roles WHERE user_id={email}")
+            cur.execute(f"DELETE FROM public.user_roles WHERE user_id='{email}'")
         except psycopg2.DatabaseError as err:
             print("Error: ", err)
             return False
         else:
             conn.commit()
             return True
+        finally:
+            conn.commit()
 
 
 class Services:
@@ -218,10 +237,10 @@ class Services:
             return answer
 
         def service(name):
-            cur.execute(f"SELECT service_name, price FROM public.services WHERE service_name = '{name}'")
+            cur.execute(f"SELECT service_name, price, type FROM public.services WHERE service_name = '{name}'")
             records = cur.fetchall()
-            for name, price in records:
-                return name, price
+            for name, price, types in records:
+                return name, price, types
 
         def full_service(name):
             cur.execute(f"SELECT service_name, price, type FROM public.services WHERE service_name = '{name}'")
@@ -241,6 +260,8 @@ class Services:
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
     class edit:
         def edit_service(name, type, new_value):
@@ -253,6 +274,8 @@ class Services:
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
         def full_edit_service(name, new_name, price, type):
             try:
@@ -264,6 +287,8 @@ class Services:
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
     class delete:
         def delete_service(name):
@@ -275,6 +300,8 @@ class Services:
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
 
 class Request:
@@ -307,18 +334,21 @@ class Request:
             else:
                 conn.commit()
                 return True
-            return
+            finally:
+                conn.commit()
 
     class edit:
         def edit_status(id, status):
             try:
-                cur.execute(f"UPDATE public.requests SET status=%s WHERE ud=%s", (status, id))
+                cur.execute(f"UPDATE public.requests SET status=%s WHERE id=%s", (status, id))
             except psycopg2.DatabaseError as err:
                 print("Error: ", err)
                 return False
             else:
                 conn.commit()
                 return True
+            finally:
+                conn.commit()
 
 
 if __name__ == '__main__':
