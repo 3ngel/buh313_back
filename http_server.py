@@ -19,6 +19,7 @@ import log
 module_name = "http_server"
 
 email_validate = r"^\S+@\S+\.\S+$"
+phone_validate = r"^((8|\+7)[\- ]?)?(\(?\d{3}\)?[\- ]?)?[\d\- ]{7}$"
 
 # Глобальное хранилище сессий
 sessions = {
@@ -398,6 +399,8 @@ def add_request(handler, json_data, client_ip):
     name = json_data.get('name')
     phone = json_data.get('phone')
     email = json_data.get('email')
+    if re.match(phone_validate, phone) is None:
+        return {"error": "Неверно указан номер телефона"}
     if re.match(email_validate, email) is None:
         return {"error": "Неверно указан email"}
 
